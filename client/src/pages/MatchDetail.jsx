@@ -121,12 +121,12 @@ export default function MatchDetail() {
                     <p className="text-sm font-semibold mt-0.5">{typeof b.prediction === 'string' && b.prediction.startsWith('{') ? JSON.stringify(JSON.parse(b.prediction)) : b.prediction}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold">£{b.stake}</p>
+                    <p className="text-sm font-bold">৳{b.stake}</p>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                       b.status === 'WON' ? 'bg-emerald-900 text-emerald-300' :
                       b.status === 'LOST' ? 'bg-red-900 text-red-300' : 'bg-gray-800 text-gray-400'
                     }`}>
-                      {b.status === 'WON' ? `+£${b.payout?.toFixed(2)}` : b.status === 'LOST' ? `-£${b.stake}` : 'Pending'}
+                      {b.status === 'WON' ? `+৳${b.payout?.toFixed(2)}` : b.status === 'LOST' ? `-৳${b.stake}` : 'Pending'}
                     </span>
                   </div>
                 </div>
@@ -212,7 +212,7 @@ export default function MatchDetail() {
 
             <div className="flex gap-3 items-center">
               <div className="relative flex-1">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-medium">£</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-medium">৳</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -227,7 +227,7 @@ export default function MatchDetail() {
               {stake > 0 && (
                 <div className="text-right text-sm">
                   <div className="text-gray-500">Win</div>
-                  <div className="font-bold text-emerald-400">£{(Number(stake) * odds).toFixed(2)}</div>
+                  <div className="font-bold text-emerald-400">৳{(Number(stake) * odds).toFixed(2)}</div>
                 </div>
               )}
             </div>

@@ -71,10 +71,10 @@ export default function Leaderboard() {
                   </div>
                   <div className="text-right">
                     <div className={`text-xl font-bold ${entry.netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {entry.netBalance >= 0 ? '+' : ''}£{entry.netBalance.toFixed(2)}
+                      {entry.netBalance >= 0 ? '+' : ''}৳{entry.netBalance.toFixed(2)}
                     </div>
                     {entry.pendingStake > 0 && (
-                      <div className="text-xs text-amber-400">£{entry.pendingStake.toFixed(2)} at risk</div>
+                      <div className="text-xs text-amber-400">৳{entry.pendingStake.toFixed(2)} at risk</div>
                     )}
                   </div>
                 </div>
@@ -105,7 +105,7 @@ export default function Leaderboard() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="text-xl font-bold text-white">£{t.amount.toFixed(2)}</span>
+                      <span className="text-xl font-bold text-white">৳{t.amount.toFixed(2)}</span>
                     </div>
                   </div>
                 ))}

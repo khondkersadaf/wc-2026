@@ -1,9 +1,97 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { RefreshCw, CheckCircle, Plus, Trash2, Key } from 'lucide-react';
+import { RefreshCw, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+
+function GoalEditor({ match, onSaved }) {
+  const existing = match.goals ? JSON.parse(match.goals) : [];
+  const [goals, setGoals] = useState(existing);
+  const [form, setForm] = useState({ scorer: '', team: 'HOME', minute: '', isOwnGoal: false, isPenalty: false });
+  const [saving, setSaving] = useState(false);
+
+  function addGoal() {
+    if (!form.scorer.trim() || !form.minute) return toast.error('Enter scorer and minute');
+    setGoals([...goals, { ...form, minute: Number(form.minute), scorer: form.scorer.trim() }]);
+    setForm({ scorer: '', team: 'HOME', minute: '', isOwnGoal: false, isPenalty: false });
+  }
+
+  function removeGoal(i) {
+    setGoals(goals.filter((_, idx) => idx !== i));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.put(`/api/matches/${match.id}/goals`, { goals });
+      toast.success('Goals saved');
+      onSaved();
+    } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-700">
+      <p className="text-xs font-semibold text-gray-400 mb-2">⚽ Goals</p>
+
+      {goals.length > 0 && (
+        <div className="space-y-1 mb-3">
+          {goals.sort((a, b) => a.minute - b.minute).map((g, i) => (
+            <div key={i} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-1.5">
+              <span className="text-xs text-gray-300">
+                {g.minute}' · {g.scorer}
+                {g.isOwnGoal ? ' (og)' : g.isPenalty ? ' (pen)' : ''}
+                {' · '}<span className={g.team === 'HOME' ? 'text-emerald-400' : 'text-blue-400'}>{g.team === 'HOME' ? match.homeTeam : match.awayTeam}</span>
+              </span>
+              <button onClick={() => removeGoal(i)} className="text-red-500 ml-2"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2 mb-2">
+        <input
+          type="text"
+          value={form.scorer}
+          onChange={(e) => setForm({ ...form, scorer: e.target.value })}
+          placeholder="Scorer name"
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-500"
+        />
+        <input
+          type="number"
+          value={form.minute}
+          onChange={(e) => setForm({ ...form, minute: e.target.value })}
+          placeholder="Min"
+          min="1" max="120"
+          className="w-14 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:outline-none focus:border-emerald-500"
+        />
+      </div>
+      <div className="flex gap-2 mb-2">
+        <select
+          value={form.team}
+          onChange={(e) => setForm({ ...form, team: e.target.value })}
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none"
+        >
+          <option value="HOME">{match.homeTeam}</option>
+          <option value="AWAY">{match.awayTeam}</option>
+        </select>
+        <label className="flex items-center gap-1 text-xs text-gray-400">
+          <input type="checkbox" checked={form.isPenalty} onChange={(e) => setForm({ ...form, isPenalty: e.target.checked })} /> Pen
+        </label>
+        <label className="flex items-center gap-1 text-xs text-gray-400">
+          <input type="checkbox" checked={form.isOwnGoal} onChange={(e) => setForm({ ...form, isOwnGoal: e.target.checked })} /> OG
+        </label>
+        <button onClick={addGoal} className="bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">
+          + Add
+        </button>
+      </div>
+      <button onClick={save} disabled={saving} className="w-full bg-emerald-600 text-white text-xs font-semibold py-2 rounded-lg">
+        {saving ? 'Saving...' : 'Save Goals'}
+      </button>
+    </div>
+  );
+}
 
 export default function Admin() {
   const { logout } = useAuth();
@@ -14,6 +102,7 @@ export default function Admin() {
   const [tab, setTab] = useState('matches');
   const [newUser, setNewUser] = useState({ name: '', pin: '', isAdmin: false });
   const [adding, setAdding] = useState(false);
+  const [expandedGoals, setExpandedGoals] = useState(null);
 
   async function loadData() {
     const [m, u, b] = await Promise.all([
@@ -100,11 +189,11 @@ export default function Admin() {
       </div>
 
       <div className="flex gap-1.5 mb-5 bg-gray-900 rounded-xl p-1">
-        {['matches', 'settle', 'users'].map((t) => (
+        {['matches', 'goals', 'settle', 'users'].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-colors ${tab === t ? 'bg-emerald-500 text-white' : 'text-gray-400'}`}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${tab === t ? 'bg-emerald-500 text-white' : 'text-gray-400'}`}
           >
             {t === 'settle' ? `Settle (${pendingBets.length})` : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -135,6 +224,41 @@ export default function Admin() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {tab === 'goals' && (
+        <div className="space-y-3">
+          <button
+            onClick={async () => {
+              try {
+                const { data } = await api.post('/api/matches/sync-goals');
+                toast.success(`Auto-synced ${data.updated} matches · ${data.notFound} not found in TheSportsDB`);
+                await loadData();
+              } catch { toast.error('Sync failed'); }
+            }}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition-colors"
+          >
+            <RefreshCw size={16} /> Auto-sync Goals from TheSportsDB
+          </button>
+          <p className="text-xs text-gray-500 text-center -mt-1">Fills in what's available · use manual entry below to add or correct</p>
+          {matches.filter((m) => m.status === 'FINISHED').sort((a, b) => new Date(b.matchDate) - new Date(a.matchDate)).map((m) => (
+            <div key={m.id} className="bg-gray-900 rounded-xl border border-gray-800 p-4">
+              <button
+                onClick={() => setExpandedGoals(expandedGoals === m.id ? null : m.id)}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="text-left">
+                  <p className="text-sm font-semibold">{m.homeTeam} {m.homeScore}–{m.awayScore} {m.awayTeam}</p>
+                  <p className="text-xs text-gray-500">{format(new Date(m.matchDate), 'd MMM')} · {m.goals ? `${JSON.parse(m.goals).length} goals entered` : 'No goals yet'}</p>
+                </div>
+                <span className="text-gray-500 text-xs">{expandedGoals === m.id ? '▲' : '▼'}</span>
+              </button>
+              {expandedGoals === m.id && (
+                <GoalEditor match={m} onSaved={loadData} />
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -169,7 +293,7 @@ export default function Admin() {
                         <div key={bet.id} className="bg-gray-800 rounded-lg p-2.5 flex items-center justify-between">
                           <div>
                             <span className="text-sm">{bet.user.name} · {bet.betType.replace(/_/g, ' ')}</span>
-                            <p className="text-xs text-gray-400">{bet.prediction} · £{bet.stake}</p>
+                            <p className="text-xs text-gray-400">{bet.prediction} · ৳{bet.stake}</p>
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => manualSettle(bet.id, 'WON')} className="text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded">Won</button>

@@ -31,7 +31,12 @@ export default function Fixtures() {
   }, []);
 
   const tabStatuses = TABS.find((t) => t.key === tab)?.statuses || [];
-  const filtered = matches.filter((m) => tabStatuses.includes(m.status));
+  const filtered = matches
+    .filter((m) => tabStatuses.includes(m.status))
+    .sort((a, b) => {
+      const diff = new Date(a.matchDate) - new Date(b.matchDate);
+      return tab === 'finished' ? -diff : diff;
+    });
 
   // Group by date
   const grouped = filtered.reduce((acc, m) => {
@@ -85,7 +90,7 @@ export default function Fixtures() {
         </div>
       ) : (
         <div className="space-y-6">
-          {Object.entries(grouped).map(([dateKey, dayMatches]) => (
+          {Object.entries(grouped).sort(([a], [b]) => tab === 'finished' ? b.localeCompare(a) : a.localeCompare(b)).map(([dateKey, dayMatches]) => (
             <div key={dateKey}>
               <h2 className="text-sm font-semibold text-gray-400 mb-2 ml-1">
                 {dateLabel(dayMatches[0].matchDate)}

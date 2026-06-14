@@ -32,6 +32,7 @@ model Match {
   awayScore   Int?
   venue       String?
   winner      String?
+  goals       String?
   syncedAt    DateTime @default(now())
   bets        Bet[]
 }

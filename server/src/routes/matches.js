@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { fetchWorldCupMatches, normalizeMatch } from '../services/footballApi.js';
+import { fetchGoalsForAllFinished } from '../services/sportsDbApi.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -36,6 +37,37 @@ router.get('/:id', requireAuth, async (req, res) => {
   res.json(match);
 });
 
+router.post('/sync-goals', requireAdmin, async (req, res) => {
+  const finished = await prisma.match.findMany({ where: { status: 'FINISHED' } });
+  const results = await fetchGoalsForAllFinished(finished);
+
+  let updated = 0;
+  let notFound = 0;
+
+  for (const { matchId, goals } of results) {
+    if (!goals) { notFound++; continue; }
+    // Only update if we got more goals than already stored (don't overwrite richer manual data)
+    const existing = await prisma.match.findUnique({ where: { id: matchId }, select: { goals: true } });
+    const existingCount = existing?.goals ? JSON.parse(existing.goals).length : 0;
+    if (goals.length >= existingCount) {
+      await prisma.match.update({ where: { id: matchId }, data: { goals: JSON.stringify(goals) } });
+      updated++;
+    }
+  }
+
+  res.json({ ok: true, updated, notFound, total: finished.length });
+});
+
+router.put('/:id/goals', requireAdmin, async (req, res) => {
+  const { goals } = req.body;
+  if (!Array.isArray(goals)) return res.status(400).json({ error: 'goals must be an array' });
+  const match = await prisma.match.update({
+    where: { id: Number(req.params.id) },
+    data: { goals: JSON.stringify(goals) },
+  });
+  res.json({ ok: true, goals: match.goals });
+});
+
 router.post('/sync', requireAdmin, async (req, res) => {
   try {
     const apiMatches = await fetchWorldCupMatches();
@@ -46,7 +78,8 @@ router.post('/sync', requireAdmin, async (req, res) => {
       const data = normalizeMatch(m);
       const existing = await prisma.match.findUnique({ where: { externalId: data.externalId } });
       if (existing) {
-        await prisma.match.update({ where: { externalId: data.externalId }, data });
+        const { goals: _goals, ...updateData } = data;
+        await prisma.match.update({ where: { externalId: data.externalId }, data: updateData });
         updated++;
       } else {
         await prisma.match.create({ data });

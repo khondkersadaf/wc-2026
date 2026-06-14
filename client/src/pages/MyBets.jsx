@@ -47,16 +47,16 @@ export default function MyBets() {
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-3 text-center">
             <div className="text-xs text-gray-500 mb-1">Staked</div>
-            <div className="text-lg font-bold">£{totalStaked.toFixed(2)}</div>
+            <div className="text-lg font-bold">৳{totalStaked.toFixed(2)}</div>
           </div>
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-3 text-center">
             <div className="text-xs text-gray-500 mb-1">Returned</div>
-            <div className="text-lg font-bold">£{totalPayout.toFixed(2)}</div>
+            <div className="text-lg font-bold">৳{totalPayout.toFixed(2)}</div>
           </div>
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-3 text-center">
             <div className="text-xs text-gray-500 mb-1">Net P&L</div>
             <div className={`text-lg font-bold ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {net >= 0 ? '+' : ''}£{net.toFixed(2)}
+              {net >= 0 ? '+' : ''}৳{net.toFixed(2)}
             </div>
           </div>
         </div>
@@ -113,15 +113,15 @@ export default function MyBets() {
                   <span className="text-sm font-medium">{formatPrediction(bet.betType, bet.prediction)}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-500">£{bet.stake} @ {bet.odds}x</span>
+                  <span className="text-xs text-gray-500">৳{bet.stake} @ {bet.odds}x</span>
                   {bet.status === 'WON' && (
-                    <p className="text-sm font-bold text-emerald-400">+£{(bet.payout - bet.stake).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-emerald-400">+৳{(bet.payout - bet.stake).toFixed(2)}</p>
                   )}
                   {bet.status === 'LOST' && (
-                    <p className="text-sm font-bold text-red-400">-£{bet.stake.toFixed(2)}</p>
+                    <p className="text-sm font-bold text-red-400">-৳{bet.stake.toFixed(2)}</p>
                   )}
                   {bet.status === 'PENDING' && (
-                    <p className="text-sm font-bold text-amber-400">Win £{(bet.stake * bet.odds).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-amber-400">Win ৳{(bet.stake * bet.odds).toFixed(2)}</p>
                   )}
                 </div>
               </div>
