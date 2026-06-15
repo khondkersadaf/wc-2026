@@ -1,75 +1,83 @@
-const BASE_URL = 'https://api.football-data.org/v4';
+const BASE_URL = 'https://v3.football.api-sports.io';
+const WC_LEAGUE_ID = 1;
+const WC_SEASON = 2026;
 
-// Track remaining quota from response headers to avoid hitting the rate limiter
-let requestsAvailableThisMinute = 10;
-let throttleUntil = null;
+const LIVE_STATUSES = ['1H', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE'];
+const FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'AWD', 'WO'];
 
-function headers() {
-  return { 'X-Auth-Token': process.env.FOOTBALL_API_KEY };
+async function apiFetch(path) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { 'x-apisports-key': process.env.FOOTBALL_API_KEY },
+  });
+  if (res.status === 429) throw new Error('Rate limit exceeded — 100 requests/day on free tier');
+  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+  const data = await res.json();
+  if (data.errors && Object.keys(data.errors).length > 0) {
+    throw new Error(`API error: ${JSON.stringify(data.errors)}`);
+  }
+  return data.response;
 }
 
-function readRateLimitHeaders(res) {
-  const available = res.headers.get('X-Requests-Available-Minute');
-  const resetAt = res.headers.get('X-RequestCounter-Reset');
-
-  if (available !== null) {
-    requestsAvailableThisMinute = Number(available);
-  }
-
-  if (resetAt !== null) {
-    throttleUntil = new Date(resetAt);
-  }
-
-  if (requestsAvailableThisMinute <= 1) {
-    const resetMs = throttleUntil ? throttleUntil.getTime() - Date.now() : 60_000;
-    const waitMs = Math.max(resetMs, 0) + 500;
-    console.warn(`[footballApi] Rate limit close — pausing new requests for ${Math.ceil(waitMs / 1000)}s`);
-    throttleUntil = new Date(Date.now() + waitMs);
-  }
+function mapStatus(short) {
+  if (LIVE_STATUSES.includes(short)) return 'IN_PLAY';
+  if (short === 'HT') return 'PAUSED';
+  if (FINISHED_STATUSES.includes(short)) return 'FINISHED';
+  if (['PST', 'CANC', 'ABD'].includes(short)) return 'POSTPONED';
+  if (short === 'TBD') return 'TIMED';
+  return 'SCHEDULED';
 }
 
-async function guardedFetch(url) {
-  if (throttleUntil && Date.now() < throttleUntil.getTime()) {
-    const waitMs = throttleUntil.getTime() - Date.now();
-    console.log(`[footballApi] Throttled — waiting ${Math.ceil(waitMs / 1000)}s before next request`);
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
+function mapWinner(f) {
+  if (f.teams.home.winner === true) return f.teams.home.name;
+  if (f.teams.away.winner === true) return f.teams.away.name;
+  const status = mapStatus(f.fixture.status.short);
+  if (status === 'FINISHED' && f.goals.home !== null && f.goals.away !== null) {
+    if (f.goals.home === f.goals.away) return 'DRAW';
   }
-
-  const res = await fetch(url, { headers: headers() });
-  readRateLimitHeaders(res);
-
-  if (res.status === 429) {
-    const retryAfter = Number(res.headers.get('Retry-After') || 60);
-    throttleUntil = new Date(Date.now() + retryAfter * 1000);
-    throw new Error(`Rate limited by API — retry after ${retryAfter}s`);
-  }
-
-  if (!res.ok) throw new Error(`Football API error: ${res.status} ${res.statusText}`);
-  return res.json();
+  return null;
 }
 
 export async function fetchWorldCupMatches() {
-  const data = await guardedFetch(`${BASE_URL}/competitions/WC/matches`);
-  return data.matches || [];
+  return apiFetch(`/fixtures?league=${WC_LEAGUE_ID}&season=${WC_SEASON}`);
 }
 
-export function normalizeMatch(m) {
-  const scoreData = m.score?.fullTime;
-  const winner = m.score?.winner;
+export function normalizeMatch(f) {
+  const round = f.league.round || 'Unknown';
   return {
-    externalId: String(m.id),
-    homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || 'TBD',
-    awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || 'TBD',
-    homeCrest: m.homeTeam?.crest || null,
-    awayCrest: m.awayTeam?.crest || null,
-    stage: m.stage || 'UNKNOWN',
-    matchGroup: m.group || null,
-    matchDate: new Date(m.utcDate),
-    status: m.status,
-    homeScore: scoreData?.home ?? null,
-    awayScore: scoreData?.away ?? null,
-    venue: m.venue || null,
-    winner: winner || null,
+    externalId: String(f.fixture.id),
+    homeTeam: f.teams.home.name,
+    awayTeam: f.teams.away.name,
+    homeCrest: f.teams.home.logo || null,
+    awayCrest: f.teams.away.logo || null,
+    stage: round,
+    matchGroup: round.toLowerCase().includes('group') ? round : null,
+    matchDate: new Date(f.fixture.date),
+    status: mapStatus(f.fixture.status.short),
+    homeScore: f.goals.home ?? null,
+    awayScore: f.goals.away ?? null,
+    venue: f.fixture.venue?.name || null,
+    winner: mapWinner(f),
     syncedAt: new Date(),
   };
+}
+
+export async function fetchGoalsForFixture(externalId, homeTeam, awayTeam) {
+  const events = await apiFetch(`/fixtures/events?fixture=${externalId}&type=Goal`);
+
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = norm(homeTeam);
+
+  return events.map((e) => {
+    const teamNorm = norm(e.team.name);
+    const side = teamNorm === homeNorm || homeNorm.includes(teamNorm) || teamNorm.includes(homeNorm)
+      ? 'HOME'
+      : 'AWAY';
+    return {
+      scorer: e.player.name,
+      minute: e.time.elapsed + (e.time.extra || 0),
+      team: side,
+      isPenalty: e.detail === 'Penalty',
+      isOwnGoal: e.detail === 'Own Goal',
+    };
+  });
 }

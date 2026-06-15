@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { fetchWorldCupMatches, normalizeMatch } from '../services/footballApi.js';
-import { fetchGoalsForAllFinished } from '../services/sportsDbApi.js';
+import { fetchWorldCupMatches, normalizeMatch, fetchGoalsForFixture } from '../services/footballApi.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -39,23 +38,30 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 router.post('/sync-goals', requireAdmin, async (req, res) => {
   const finished = await prisma.match.findMany({ where: { status: 'FINISHED' } });
-  const results = await fetchGoalsForAllFinished(finished);
 
   let updated = 0;
-  let notFound = 0;
+  let skipped = 0;
+  let errors = 0;
 
-  for (const { matchId, goals } of results) {
-    if (!goals) { notFound++; continue; }
-    // Only update if we got more goals than already stored (don't overwrite richer manual data)
-    const existing = await prisma.match.findUnique({ where: { id: matchId }, select: { goals: true } });
-    const existingCount = existing?.goals ? JSON.parse(existing.goals).length : 0;
-    if (goals.length >= existingCount) {
-      await prisma.match.update({ where: { id: matchId }, data: { goals: JSON.stringify(goals) } });
-      updated++;
+  for (const match of finished) {
+    try {
+      const goals = await fetchGoalsForFixture(match.externalId, match.homeTeam, match.awayTeam);
+      const existingCount = match.goals ? JSON.parse(match.goals).length : 0;
+      if (goals.length >= existingCount) {
+        await prisma.match.update({ where: { id: match.id }, data: { goals: JSON.stringify(goals) } });
+        updated++;
+      } else {
+        skipped++;
+      }
+    } catch (err) {
+      console.error(`Goal sync failed for match ${match.id}:`, err.message);
+      errors++;
+      if (err.message.includes('Rate limit')) break;
     }
+    await new Promise((r) => setTimeout(r, 250));
   }
 
-  res.json({ ok: true, updated, notFound, total: finished.length });
+  res.json({ ok: true, updated, skipped, errors, total: finished.length });
 });
 
 router.put('/:id/goals', requireAdmin, async (req, res) => {
@@ -74,8 +80,8 @@ router.post('/sync', requireAdmin, async (req, res) => {
     let updated = 0;
     let created = 0;
 
-    for (const m of apiMatches) {
-      const data = normalizeMatch(m);
+    for (const f of apiMatches) {
+      const data = normalizeMatch(f);
       const existing = await prisma.match.findUnique({ where: { externalId: data.externalId } });
       if (existing) {
         const { goals: _goals, ...updateData } = data;
