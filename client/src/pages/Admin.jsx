@@ -233,15 +233,15 @@ export default function Admin() {
             onClick={async () => {
               try {
                 const { data } = await api.post('/api/matches/sync-goals');
-                toast.success(`Auto-synced ${data.updated} matches · ${data.skipped} skipped · ${data.errors} errors`);
+                toast.success(`Goals synced: ${data.updated} matches updated`);
                 await loadData();
               } catch { toast.error('Sync failed'); }
             }}
             className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition-colors"
           >
-            <RefreshCw size={16} /> Auto-sync Goals from API Football
+            <RefreshCw size={16} /> Auto-sync Goals from football-data.org
           </button>
-          <p className="text-xs text-gray-500 text-center -mt-1">Uses 1 request per match · 100/day limit · use manual entry to correct</p>
+          <p className="text-xs text-gray-500 text-center -mt-1">Pulls goal scorers from live data · use manual entry to add or correct</p>
           {matches.filter((m) => m.status === 'FINISHED').sort((a, b) => new Date(b.matchDate) - new Date(a.matchDate)).map((m) => (
             <div key={m.id} className="bg-gray-900 rounded-xl border border-gray-800 p-4">
               <button
