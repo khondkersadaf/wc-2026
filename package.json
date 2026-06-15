@@ -1,6 +1,7 @@
 {
   "name": "worldcup-betting",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "setup": "npm install --prefix server && npm install --prefix client && npm run db:push --prefix server",
